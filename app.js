@@ -210,7 +210,7 @@ Olhe a foto e identifique o carrinho. Responda em português.
 let AnthropicSDK = null;
 async function carregarSDK() {
   if (!AnthropicSDK) {
-    const mod = await import("./vendor/anthropic-sdk.js");
+    const mod = await import("./vendor/anthropic-sdk.js?v=2");
     AnthropicSDK = mod.default;
   }
   return AnthropicSDK;

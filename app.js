@@ -140,28 +140,37 @@ $("form").addEventListener("change", calcular);
 
 // ---------- Chave da API ----------
 const CHAVE_KEY = "hw_api_key";
+// Chaves da Anthropic começam com "sk-ant-"; qualquer outra é tratada como Gemini.
+const usaClaude = (chave) => chave.startsWith("sk-ant-");
 function chaveAtual() { try { return localStorage.getItem(CHAVE_KEY) || ""; } catch { return ""; } }
 function atualizarBotaoIA() {
   $("btnIA").disabled = !(fotoBase64 && chaveAtual());
   $("btnIA").title = !chaveAtual() ? "Configure a chave da API primeiro" : !fotoBase64 ? "Tire uma foto primeiro" : "";
 }
-$("apiKey").value = chaveAtual() ? "••••••••" : "";
+// Mostra só o fim da chave salva, para conferir sem expor ela inteira
+function mostrarChaveSalva() {
+  const c = chaveAtual();
+  $("apiKey").value = "";
+  $("apiKey").placeholder = c
+    ? `✅ Chave salva (${usaClaude(c) ? "Claude" : "Gemini"}, termina em …${c.slice(-4)})`
+    : "Cole aqui sua chave do Gemini ou do Claude";
+}
 $("salvarChave").addEventListener("click", () => {
   const v = $("apiKey").value.trim();
-  if (!v || v.startsWith("•")) return;
+  if (!v) return;
   gravar(CHAVE_KEY, v);
-  $("apiKey").value = "••••••••";
+  mostrarChaveSalva();
   $("chaveBox").open = false;
-  mostrarStatus("Chave salva neste aparelho.", "ok");
+  mostrarStatus(`Chave salva neste aparelho (termina em …${v.slice(-4)}).`, "ok");
   atualizarBotaoIA();
 });
 $("apagarChave").addEventListener("click", () => {
   try { localStorage.removeItem(CHAVE_KEY); } catch {}
-  $("apiKey").value = "";
+  mostrarChaveSalva();
   mostrarStatus("Chave apagada.", "ok");
   atualizarBotaoIA();
 });
-if (!chaveAtual()) $("chaveBox").open = false;
+mostrarChaveSalva();
 
 function mostrarStatus(msg, tipo = "") {
   const s = $("statusIA");
@@ -210,14 +219,12 @@ Olhe a foto e identifique o carrinho. Responda em português.
 let AnthropicSDK = null;
 async function carregarSDK() {
   if (!AnthropicSDK) {
-    const mod = await import("./vendor/anthropic-sdk.js?v=2");
+    const mod = await import("./vendor/anthropic-sdk.js?v=3");
     AnthropicSDK = mod.default;
   }
   return AnthropicSDK;
 }
 
-// Chaves da Anthropic começam com "sk-ant-"; qualquer outra é tratada como Gemini.
-const usaClaude = (chave) => chave.startsWith("sk-ant-");
 
 async function identificarClaude(chave) {
   const Anthropic = await carregarSDK();

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e8471c">
+  <title>Avaliador de Hot Wheels</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topo">
+    <h1>🏎️ Avaliador de Hot Wheels</h1>
+    <p>Tire uma foto do carrinho e veja quanto ele vale mais ou menos.</p>
+  </header>
+
+  <main>
+    <!-- 1. Foto -->
+    <section class="card">
+      <h2>1. Foto</h2>
+      <div id="preview" class="preview vazio">
+        <span>Nenhuma foto ainda</span>
+        <img id="previewImg" alt="Foto do Hot Wheels" hidden>
+      </div>
+      <div class="botoes">
+        <label class="btn primario">
+          📷 Tirar foto
+          <input id="inputCamera" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+        <label class="btn">
+          🖼️ Escolher da galeria
+          <input id="inputGaleria" type="file" accept="image/*" hidden>
+        </label>
+      </div>
+      <p class="dica">Dica: fotografe com boa luz. Se estiver na cartela, deixe o nome e a frente visíveis.</p>
+    </section>
+
+    <!-- 2. Identificação por IA -->
+    <section class="card">
+      <h2>2. Identificar com IA <small>(opcional)</small></h2>
+      <p class="dica">A IA olha a foto, tenta reconhecer o modelo e já preenche o formulário abaixo.
+        Precisa de uma chave da API da Anthropic (fica salva só no seu aparelho).</p>
+      <details id="chaveBox">
+        <summary>Configurar chave da API</summary>
+        <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off">
+        <div class="botoes">
+          <button id="salvarChave" class="btn" type="button">Salvar chave</button>
+          <button id="apagarChave" class="btn" type="button">Apagar</button>
+        </div>
+        <p class="dica">Crie uma em console.anthropic.com. Cada análise custa poucos centavos.</p>
+      </details>
+      <button id="btnIA" class="btn primario largo" type="button" disabled>🤖 Identificar pela foto</button>
+      <div id="statusIA" class="status" hidden></div>
+    </section>
+
+    <!-- 3. Detalhes -->
+    <section class="card">
+      <h2>3. Detalhes do carrinho</h2>
+      <form id="form">
+        <label>Nome / modelo
+          <input id="nome" type="text" placeholder="Ex.: Nissan Skyline GT-R (R34)">
+        </label>
+
+        <label>Tipo / linha
+          <select id="tipo"></select>
+        </label>
+
+        <label>Estado
+          <select id="estado"></select>
+        </label>
+
+        <fieldset>
+          <legend>Extras</legend>
+          <label class="check"><input type="checkbox" id="popular"> Modelo muito procurado (JDM, Porsche, VW, Velozes e Furiosos...)</label>
+          <label class="check"><input type="checkbox" id="erro"> Erro de fábrica (roda trocada, sem tampografia...)</label>
+          <label class="check"><input type="checkbox" id="primeira"> Primeira edição (First Edition / New Model)</label>
+          <label class="check"><input type="checkbox" id="realriders"> Rodas de borracha (Real Riders)</label>
+        </fieldset>
+      </form>
+    </section>
+
+    <!-- 4. Resultado -->
+    <section class="card resultado">
+      <h2>4. Valor estimado</h2>
+      <div class="valor" id="valor">R$ —</div>
+      <div class="faixa" id="faixa"></div>
+      <p id="explicacao" class="explicacao"></p>
+      <button id="btnSalvar" class="btn primario largo" type="button">⭐ Salvar na minha coleção</button>
+      <p class="aviso">Estimativa aproximada para o mercado brasileiro (sites de venda e grupos de colecionadores).
+        O preço real varia com a procura. Pesquise o nome no Mercado Livre para comparar.</p>
+      <a id="linkML" class="btn largo" target="_blank" rel="noopener" hidden>🔎 Ver preços no Mercado Livre</a>
+    </section>
+
+    <!-- 5. Coleção -->
+    <section class="card">
+      <h2>Minha coleção</h2>
+      <div class="total">
+        <span id="qtd">0 carrinhos</span>
+        <strong id="totalColecao">R$ 0</strong>
+      </div>
+      <ul id="lista" class="lista"></ul>
+    </section>
+  </main>
+
+  <footer>Feito para colecionadores. Não é afiliado à Mattel.</footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

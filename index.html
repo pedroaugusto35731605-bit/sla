@@ -38,15 +38,15 @@
     <section class="card">
       <h2>2. Identificar com IA <small>(opcional)</small></h2>
       <p class="dica">A IA olha a foto, tenta reconhecer o modelo e já preenche o formulário abaixo.
-        Precisa de uma chave da API da Anthropic (fica salva só no seu aparelho).</p>
+        Precisa de uma chave da API do Gemini (Google) ou do Claude (Anthropic). Ela fica salva só no seu aparelho.</p>
       <details id="chaveBox">
         <summary>Configurar chave da API</summary>
-        <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off">
+        <input id="apiKey" type="password" placeholder="Cole aqui sua chave do Gemini ou do Claude" autocomplete="off">
         <div class="botoes">
           <button id="salvarChave" class="btn" type="button">Salvar chave</button>
           <button id="apagarChave" class="btn" type="button">Apagar</button>
         </div>
-        <p class="dica">Crie uma em console.anthropic.com. Cada análise custa poucos centavos.</p>
+        <p class="dica">Gemini: crie grátis em aistudio.google.com. Claude: console.anthropic.com.</p>
       </details>
       <button id="btnIA" class="btn primario largo" type="button" disabled>🤖 Identificar pela foto</button>
       <div id="statusIA" class="status" hidden></div>

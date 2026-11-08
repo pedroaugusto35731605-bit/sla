@@ -170,7 +170,7 @@ function mostrarStatus(msg, tipo = "") {
   s.textContent = msg;
 }
 
-// ---------- Identificação com Claude ----------
+// ---------- Identificação com IA (Gemini ou Claude) ----------
 const ESQUEMA = {
   type: "object",
   additionalProperties: false,
@@ -216,42 +216,86 @@ async function carregarSDK() {
   return AnthropicSDK;
 }
 
+// Chaves da Anthropic começam com "sk-ant-"; qualquer outra é tratada como Gemini.
+const usaClaude = (chave) => chave.startsWith("sk-ant-");
+
+async function identificarClaude(chave) {
+  const Anthropic = await carregarSDK();
+  const client = new Anthropic({ apiKey: chave, dangerouslyAllowBrowser: true });
+  const resposta = await client.beta.messages.create({
+    model: "claude-opus-5-5",
+    max_tokens: 16000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: {
+      effort: "medium",
+      format: { type: "json_schema", schema: ESQUEMA },
+    },
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: fotoBase64 } },
+        { type: "text", text: PROMPT },
+      ],
+    }],
+  });
+  if (resposta.stop_reason === "refusal") {
+    throw new Error("A IA não conseguiu analisar essa foto. Preencha os detalhes manualmente.");
+  }
+  if (resposta.stop_reason === "max_tokens") throw new Error("A resposta veio incompleta. Tente de novo.");
+  const bloco = resposta.content.find((b) => b.type === "text");
+  if (!bloco) throw new Error("A IA não devolveu resposta. Tente de novo.");
+  return JSON.parse(bloco.text);
+}
+
+// Tenta o modelo mais novo do Gemini Flash; se não existir, usa o 2.5 Flash.
+const MODELOS_GEMINI = ["gemini-flash-latest", "gemini-2.5-flash"];
+
+async function identificarGemini(chave) {
+  const { additionalProperties, ...schema } = ESQUEMA; // o Gemini não aceita esse campo
+  let ultimoErro = new Error("Nenhum modelo do Gemini disponível para essa chave.");
+  for (const modelo of MODELOS_GEMINI) {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": chave },
+      body: JSON.stringify({
+        contents: [{
+          role: "user",
+          parts: [
+            { inline_data: { mime_type: "image/jpeg", data: fotoBase64 } },
+            { text: PROMPT },
+          ],
+        }],
+        generationConfig: { responseMimeType: "application/json", responseSchema: schema },
+      }),
+    });
+    const dados = await resp.json().catch(() => ({}));
+    if (resp.status === 404) { ultimoErro = new Error(dados?.error?.message || "Modelo não encontrado."); continue; }
+    if (!resp.ok) {
+      const e = new Error(dados?.error?.message || `Erro ${resp.status}`);
+      e.status = resp.status;
+      throw e;
+    }
+    const cand = dados.candidates?.[0];
+    if (!cand || cand.finishReason === "SAFETY" || cand.finishReason === "PROHIBITED_CONTENT") {
+      throw new Error("A IA não conseguiu analisar essa foto. Preencha os detalhes manualmente.");
+    }
+    if (cand.finishReason === "MAX_TOKENS") throw new Error("A resposta veio incompleta. Tente de novo.");
+    const texto = (cand.content?.parts || []).map((p) => p.text || "").join("");
+    if (!texto) throw new Error("A IA não devolveu resposta. Tente de novo.");
+    return JSON.parse(texto);
+  }
+  throw ultimoErro;
+}
+
 $("btnIA").addEventListener("click", async () => {
   if (!fotoBase64 || !chaveAtual()) return;
   $("btnIA").disabled = true;
   mostrarStatus("Analisando a foto… (pode levar uns 20 segundos)");
 
   try {
-    const Anthropic = await carregarSDK();
-    const client = new Anthropic({ apiKey: chaveAtual(), dangerouslyAllowBrowser: true });
-
-    const resposta = await client.beta.messages.create({
-      model: "claude-opus-5-5",
-      max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: {
-        effort: "medium",
-        format: { type: "json_schema", schema: ESQUEMA },
-      },
-      messages: [{
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: fotoBase64 } },
-          { type: "text", text: PROMPT },
-        ],
-      }],
-    });
-
-    if (resposta.stop_reason === "refusal") {
-      throw new Error("A IA não conseguiu analisar essa foto. Preencha os detalhes manualmente.");
-    }
-    if (resposta.stop_reason === "max_tokens") {
-      throw new Error("A resposta veio incompleta. Tente de novo.");
-    }
-    const bloco = resposta.content.find((b) => b.type === "text");
-    if (!bloco) throw new Error("A IA não devolveu resposta. Tente de novo.");
-    const r = JSON.parse(bloco.text);
+    const chave = chaveAtual();
+    const r = usaClaude(chave) ? await identificarClaude(chave) : await identificarGemini(chave);
 
     if (!r.e_hot_wheels) {
       estimativaIA = null;
@@ -278,7 +322,8 @@ $("btnIA").addEventListener("click", async () => {
     calcular();
   } catch (err) {
     let msg = err?.message || String(err);
-    if (err?.status === 401) msg = "Chave da API inválida. Confira em console.anthropic.com.";
+    if (err?.status === 401 || (err?.status === 400 && /api key/i.test(msg))) msg = "Chave da API inválida. Confira se copiou ela inteira.";
+    else if (err?.status === 403) msg = "Essa chave não tem permissão para usar a IA. Confira no painel onde você criou a chave.";
     else if (err?.status === 429) msg = "Muitas análises seguidas. Espere um pouco e tente de novo.";
     else if (err?.status >= 500) msg = "O serviço da IA está instável agora. Tente em alguns minutos.";
     else if (/Failed to fetch|NetworkError|import/i.test(msg)) msg = "Sem conexão com a IA. Verifique a internet.";

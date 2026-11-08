@@ -5,7 +5,7 @@ Site para tirar foto dos seus Hot Wheels e ver quanto eles valem, mais ou menos,
 ## Como funciona
 
 1. **Foto** – tire uma foto com a câmera do celular ou escolha da galeria.
-2. **Identificar com IA (opcional)** – com uma chave da API da Anthropic, o Claude olha a foto,
+2. **Identificar com IA (opcional)** – com uma chave do Gemini (Google) ou do Claude (Anthropic), a IA olha a foto,
    reconhece o modelo, a linha (básico, Treasure Hunt, Super Treasure Hunt, Premium…) e o estado,
    e sugere uma faixa de preço.
 3. **Detalhes** – confira ou preencha à mão: tipo, estado (lacrado/solto) e extras
@@ -13,7 +13,7 @@ Site para tirar foto dos seus Hot Wheels e ver quanto eles valem, mais ou menos,
 4. **Valor estimado** – mostra o valor médio e a faixa, com link para comparar no Mercado Livre.
 5. **Minha coleção** – salve os carrinhos e veja o valor total. Fica salvo só no seu aparelho.
 
-Sem a chave da API o site funciona normalmente pela tabela de preços.
+Sem chave o site funciona normalmente pela tabela de preços.
 
 ## Como usar
 
@@ -27,9 +27,12 @@ A câmera precisa de HTTPS (o GitHub Pages já usa).
 
 ## Chave da API
 
-Crie em [console.anthropic.com](https://console.anthropic.com). Ela fica salva só no navegador
-do seu aparelho e é enviada direto para a API da Anthropic. Não use este site num aparelho
-compartilhado com sua chave salva. Cada análise custa poucos centavos de dólar.
+- **Gemini:** crie grátis em [aistudio.google.com](https://aistudio.google.com/apikey).
+- **Claude:** crie em [console.anthropic.com](https://console.anthropic.com) (chaves que começam com `sk-ant-`).
+
+Cole a chave no campo "Configurar chave da API" do site. Ela fica salva só no navegador do seu
+aparelho e é enviada direto para o Google ou a Anthropic. Nunca coloque a chave dentro do código:
+o repositório é público.
 
 ## Preços
 

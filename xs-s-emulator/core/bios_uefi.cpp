@@ -215,6 +215,15 @@ void UefiFirmware::initialize_devices(bool vk_validation) {
              static_cast<double>(spec::kSsd.decompressed_max_bytes_s) / 1e9, spec::kSsd.command_latency_ns / 1000,
              spec::kSsd.queues, spec::kSsd.queue_depth);
     (void)ssd_;
+    if (system_) {
+        std::string types;
+        for (const auto& t : system_->packages) types += (types.empty() ? "" : ", ") + t;
+        log_info("UEFI", "DXE: firmware do sistema {} instalado — {} pacotes ({}), {}", system_->version,
+                 system_->packages.size(), types, human_bytes(system_->bytes));
+        log_info("UEFI", "DXE: pacotes criptografados com chaves do console — boot segue com o kernel do Xbox OS em HLE");
+    } else {
+        log_info("UEFI", "DXE: nenhum firmware do sistema instalado (OSU1) — usando o kernel HLE embutido");
+    }
 }
 
 void UefiFirmware::boot(const BootImage& image) {

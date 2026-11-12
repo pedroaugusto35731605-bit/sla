@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -63,6 +64,15 @@ private:
     std::atomic<std::uint64_t> failed_allocs_{0};
 };
 
+// Firmware oficial instalado a partir da Atualização Offline do Sistema (OSU1).
+// Preenchido pelo chamador (filesystem/firmware.hpp) para manter o núcleo independente.
+struct SystemSoftware {
+    std::string              version;
+    std::string              path;
+    std::vector<std::string> packages;      // "SystemOS", "HostOS", ...
+    std::uint64_t            bytes = 0;
+};
+
 struct BootImage {
     std::string               name;
     std::vector<std::uint8_t> bytes;        // código + dados, carregados em kImageVA
@@ -77,6 +87,8 @@ public:
     void initialize_devices(bool vk_validation);   // DXE
     void boot(const BootImage& image);             // BDS
 
+    void set_system_software(SystemSoftware s) { system_ = std::move(s); }
+
     static BootImage diagnostic_rom();             // homebrew de diagnóstico embutido
     static BootImage load_flat_binary(const std::filesystem::path& p);
 
@@ -86,6 +98,7 @@ private:
     GpuDevice&     gpu_;
     SsdDevice&     ssd_;
     AllocationId   image_alloc_ = 0, stack_alloc_ = 0;
+    std::optional<SystemSoftware> system_;
 };
 
 }  // namespace xss

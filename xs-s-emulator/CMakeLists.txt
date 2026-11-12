@@ -71,6 +71,7 @@ add_library(xss_core STATIC
   filesystem/iso_parser.cpp
   filesystem/texture_streamer.cpp
   filesystem/image_builder.cpp
+  filesystem/firmware.cpp
 )
 target_include_directories(xss_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/core ${CMAKE_CURRENT_SOURCE_DIR}/filesystem)
 target_compile_options(xss_core PUBLIC ${XSS_OPT_FLAGS})

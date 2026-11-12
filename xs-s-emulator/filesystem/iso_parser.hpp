@@ -71,6 +71,19 @@ private:
     std::uint64_t size_ = 0, simulated_ns_ = 0, commands_ = 0;
 };
 
+// Cabeçalho de um pacote XVD/XVC (contêiner de jogos e do próprio sistema operacional).
+struct XvdHeader {
+    std::string   content_type;     // ex.: "SystemOS", "HostOS", "Title"
+    std::uint32_t content_type_id = 0;
+    std::string   vduid;            // ID do volume
+    std::string   product_id;
+    std::string   version;          // PackageVersion "a.b.c.d"
+    std::uint64_t drive_size = 0;
+    std::uint32_t format_version = 0;
+};
+// Lê o cabeçalho de um arquivo XVD (os primeiros 0x400 bytes). Devolve nullopt se não for XVD.
+std::optional<XvdHeader> read_xvd_header(const std::filesystem::path& file);
+
 class IsoParser {
 public:
     // Lança std::runtime_error se o arquivo não puder ser aberto.

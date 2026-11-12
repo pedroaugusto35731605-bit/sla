@@ -24,13 +24,16 @@ import os
 import random
 import shutil
 import sys
+import threading
 import time
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from PyQt6 import uic
-from PyQt6.QtCore import QEasingCurve, QEvent, QProcess, QPropertyAnimation, QRectF, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import (QEasingCurve, QEvent, QObject, QProcess, QProcessEnvironment, QPropertyAnimation, QRectF,
+                          QSize, Qt, QTimer, pyqtSignal)
 from PyQt6.QtGui import (QAction, QColor, QFont, QFontMetrics, QKeySequence, QLinearGradient, QPainter,
                          QPainterPath, QPen, QPixmap, QTextCursor)
 from PyQt6.QtWidgets import (QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget,
@@ -63,10 +66,11 @@ QMainWindow, #centralwidget, #content {{ background: {BG}; }}
 #rail {{ background: {SURFACE}; border-right: 1px solid {BORDER}; }}
 #brand {{ font-size: 20px; font-weight: 800; letter-spacing: 4px; }}
 #brandSub {{ color: {FAINT}; font-size: 11px; letter-spacing: 3px; }}
-#sectionHw, #sectionMem, #sectionSsd, #installTitle {{
+#sectionHw, #sectionMem, #sectionSsd, #sectionSys, #installTitle {{
     color: {FAINT}; font-size: 10px; font-weight: 700; letter-spacing: 2px;
 }}
-#hwInfo, #memInfo, #ssdInfo {{ color: {MUTED}; font-size: 12px; line-height: 150%; }}
+#btnFirmware {{ padding: 7px 10px; font-size: 12px; margin-top: 4px; }}
+#hwInfo, #memInfo, #ssdInfo, #fwInfo {{ color: {MUTED}; font-size: 12px; line-height: 150%; }}
 #coreStatus {{ color: {FAINT}; font-size: 11px; }}
 #pageTitle {{ font-size: 26px; font-weight: 700; }}
 #gameCount {{ color: {FAINT}; font-size: 15px; padding: 8px 0 0 6px; }}
@@ -460,6 +464,107 @@ class InstallRow(QFrame):
 # ---------------------------------------------------------------------------
 #  Console do núcleo
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+#  Firmware do sistema (Atualização Offline do Sistema: OSU1/OSU2/OSU3)
+# ---------------------------------------------------------------------------
+def firmware_root(lib_root: Path) -> Path:
+    return lib_root / "firmware"          # o núcleo usa o mesmo: $XSS_HOME/firmware
+
+
+def installed_firmware_version(lib_root: Path) -> str | None:
+    try:
+        v = (firmware_root(lib_root) / "current").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return v or None
+
+
+class ZipExtractor(QObject):
+    """Extrai o OSU1.zip numa thread, emitindo progresso. Protegido contra zip-slip."""
+
+    progress = pyqtSignal(int, int, str)     # bytes feitos, total, arquivo atual
+    done = pyqtSignal(bool, str)             # sucesso, mensagem de erro
+
+    CHUNK = 4 * 1024 * 1024
+
+    def __init__(self, zip_path: Path, dest: Path):
+        super().__init__()
+        self.zip_path, self.dest = zip_path, dest
+        self.cancelled = False
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            dest = self.dest.resolve()
+            with zipfile.ZipFile(self.zip_path) as z:
+                members = [m for m in z.infolist() if not m.is_dir()]
+                if not any("$systemupdate" in m.filename.lower() or m.filename.lower().endswith(".xvd")
+                           for m in members):
+                    self.done.emit(False, "o .zip não contém a pasta $SystemUpdate — é mesmo o OSU1?")
+                    return
+                total, done = sum(m.file_size for m in members), 0
+                for m in members:
+                    target = (dest / m.filename).resolve()
+                    if dest not in target.parents:          # zip-slip: caminho saindo do destino
+                        self.done.emit(False, f"entrada suspeita no zip: {m.filename}")
+                        return
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with z.open(m) as src, open(target, "wb") as out:
+                        while chunk := src.read(self.CHUNK):
+                            if self.cancelled:
+                                self.done.emit(False, "cancelado")
+                                return
+                            out.write(chunk)
+                            done += len(chunk)
+                            self.progress.emit(done, total, m.filename)
+            self.done.emit(True, "")
+        except (zipfile.BadZipFile, OSError) as e:
+            self.done.emit(False, str(e))
+
+
+class FirmwareRow(QFrame):
+    """Linha da fila mostrando a instalação do firmware (extração do zip + validação no núcleo)."""
+
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        top = QHBoxLayout()
+        self.name = QLabel(f"<b>Firmware do sistema</b>&nbsp;&nbsp;<span style='color:{FAINT}'>{title}</span>")
+        self.info = QLabel("Preparando…")
+        self.info.setStyleSheet(f"color:{MUTED}; font-size:12px; font-family:'JetBrains Mono','DejaVu Sans Mono',monospace;")
+        self.cancel_btn = QPushButton("Cancelar")
+        self.cancel_btn.setStyleSheet("padding:3px 10px; font-size:11px;")
+        top.addWidget(self.name, 1)
+        top.addWidget(self.info)
+        top.addWidget(self.cancel_btn)
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 1000)
+        self.bar.setTextVisible(False)
+        lay.addLayout(top)
+        lay.addWidget(self.bar)
+
+    def set_progress(self, done: int, total: int, text: str) -> None:
+        if total > 0:
+            self.bar.setRange(0, 1000)
+            self.bar.setValue(int(1000 * done / total))
+        else:
+            self.bar.setRange(0, 0)                  # indeterminado
+        self.info.setText(text)
+
+    def finish(self, text: str, ok: bool = True) -> None:
+        self.bar.setRange(0, 1000)
+        self.bar.setValue(1000 if ok else 0)          # falha: barra vazia, texto em vermelho
+        self.info.setText(text)
+        if not ok:
+            self.info.setStyleSheet(self.info.styleSheet() + "color:#D27373;")
+        self.cancel_btn.hide()
+        QTimer.singleShot(4000, self.deleteLater)
+
+
 class CoreConsole(QDialog):
     def __init__(self, core: str, args: list[str], title: str, parent=None):
         super().__init__(parent)
@@ -514,6 +619,9 @@ class MainWindow(QMainWindow):
         self.ssdBar.setRange(0, 1000)
         self.installQueue.setVisible(False)
         self.installCard.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.btnFirmware.clicked.connect(self.install_firmware)
+        self._fw_busy = False
+        self.update_firmware_status()
         self.coreStatus.setText(f"núcleo: {Path(self.core).name} ✓" if self.core
                                 else "núcleo C++ não encontrado — compile com CMake")
 
@@ -596,6 +704,7 @@ class MainWindow(QMainWindow):
                                       and game.format.startswith("XDVDFS")))
         if game is None:
             self.detailCover.clear()
+            self.detailCover.setVisible(False)
             self.detailTitle.setText("Selecione um jogo")
             for lbl in (self.detailPublisher, self.detailTags):
                 lbl.setText("")
@@ -711,6 +820,118 @@ class MainWindow(QMainWindow):
         self.refresh(select_id=game.id)
         self.statusbar.showMessage(f"Importado: {game.title}", 5000)
         return True
+
+    # ---------------- firmware (OSU1)
+    def update_firmware_status(self) -> None:
+        v = installed_firmware_version(self.library.root)
+        self.fwInfo.setText(f"Firmware {v} instalado" if v else "Firmware: não instalado\n(o boot usa o kernel HLE)")
+        self.btnFirmware.setText("Atualizar firmware (OSU1)" if v else "Instalar firmware (OSU1)")
+
+    def install_firmware(self) -> None:
+        if self._fw_busy or not self._need_core():
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("Instalar firmware do sistema")
+        box.setText("Selecione a Atualização Offline do Sistema (OSU1) baixada do site de suporte do Xbox.")
+        box.setInformativeText("Pode ser o arquivo .zip ou a pasta já extraída que contém $SystemUpdate.\n\n"
+                               "Os pacotes do sistema são criptografados pelo console: o emulador valida e registra "
+                               "a versão, mas continua executando com o kernel HLE.")
+        zip_btn = box.addButton("Arquivo .zip", QMessageBox.ButtonRole.AcceptRole)
+        dir_btn = box.addButton("Pasta", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is zip_btn:
+            path, _ = QFileDialog.getOpenFileName(self, "OSU1.zip", str(Path.home()), "Atualização offline (*.zip)")
+            if path:
+                self.install_firmware_zip(Path(path))
+        elif box.clickedButton() is dir_btn:
+            path = QFileDialog.getExistingDirectory(self, "Pasta do OSU1 ($SystemUpdate)", str(Path.home()))
+            if path:
+                self.install_firmware_dir(Path(path), move=False)
+
+    def _firmware_row(self, title: str) -> FirmwareRow:
+        row = FirmwareRow(title, self.installQueue)
+        row.destroyed.connect(lambda *_: QTimer.singleShot(0, self._prune_queue))
+        self.queueLayout.addWidget(row)
+        self.installQueue.setVisible(True)
+        return row
+
+    def install_firmware_zip(self, zip_path: Path) -> None:
+        root = firmware_root(self.library.root)
+        incoming = root / "_incoming"
+        shutil.rmtree(incoming, ignore_errors=True)
+        incoming.mkdir(parents=True, exist_ok=True)
+        self._fw_busy = True
+        row = self._firmware_row(zip_path.name)
+        ex = ZipExtractor(zip_path, incoming)
+        self._extractor = ex                                    # mantém referência viva
+
+        def on_progress(done: int, total: int, name: str) -> None:
+            row.set_progress(done, total, f"Extraindo  {gb(done)} / {gb(total)}  {Path(name).name}")
+
+        def on_done(ok: bool, err: str) -> None:
+            if not ok:
+                shutil.rmtree(incoming, ignore_errors=True)
+                self._fw_busy = False
+                row.finish("Falhou", ok=False)
+                QMessageBox.warning(self, "Firmware não instalado", err)
+                return
+            self._run_fwinstall(incoming, move=True, row=row)
+
+        ex.progress.connect(on_progress)
+        ex.done.connect(on_done)
+        row.cancel_btn.clicked.connect(lambda: setattr(ex, "cancelled", True))
+        ex.start()
+
+    def install_firmware_dir(self, folder: Path, move: bool) -> None:
+        self._fw_busy = True
+        row = self._firmware_row(folder.name)
+        self._run_fwinstall(folder, move=move, row=row)
+
+    def _run_fwinstall(self, source: Path, move: bool, row: FirmwareRow) -> None:
+        row.set_progress(0, 0, "Validando pacotes XVD…")
+        proc = QProcess(self)
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("XSS_HOME", str(self.library.root))           # mesma pasta que a UI usa
+        proc.setProcessEnvironment(env)
+        out: list[str] = []
+
+        def on_output() -> None:
+            text = bytes(proc.readAllStandardOutput()).decode("utf-8", "replace")
+            for line in text.splitlines():
+                out.append(line)
+                if "copiando" in line:                           # progresso da cópia de uma pasta
+                    row.set_progress(0, 0, line.split("] ", 2)[-1][:70])
+
+        def on_finished(code: int, _status) -> None:
+            self._fw_busy = False
+            row.cancel_btn.hide()
+            info = {}
+            for line in reversed(out):
+                if line.startswith("{"):
+                    try:
+                        info = json.loads(line)
+                    except ValueError:
+                        pass
+                    break
+            if move:
+                shutil.rmtree(firmware_root(self.library.root) / "_incoming", ignore_errors=True)
+            if code != 0 or not info.get("valid"):
+                row.finish("Recusado", ok=False)
+                QMessageBox.warning(self, "Firmware não instalado",
+                                    info.get("error") or "\n".join(out[-5:]) or "o núcleo recusou a pasta")
+                return
+            n = info.get("system_packages", 0)
+            row.finish(f"Instalado  {info.get('version')}  ·  {n} pacotes  ·  {gb(info.get('total_bytes', 0))}")
+            self.update_firmware_status()
+            self.statusbar.showMessage(f"Firmware {info.get('version')} instalado.", 6000)
+
+        proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        proc.readyReadStandardOutput.connect(on_output)
+        proc.finished.connect(on_finished)
+        row.cancel_btn.clicked.connect(proc.kill)
+        args = ["fwinstall", str(source)] + (["--move"] if move else [])
+        proc.start(self.core, args)
 
     def _need_core(self) -> bool:
         if self.core:

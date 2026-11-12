@@ -82,6 +82,8 @@ boot detecta isso e cai para headless sozinho.
 ./build/xss-emu info demo.iso --files     # metadados + tags em JSON
 ./build/xss-emu bench demo.iso            # carga DirectStorage: NVMe × SATA × HDD
 ./build/xss-emu stream demo.iso           # streaming de texturas disputando os 7 GB
+./build/xss-emu fwinfo ~/Downloads/OSU1   # inspeciona a atualização offline (sem instalar)
+./build/xss-emu fwinstall ~/Downloads/OSU1
 ```
 
 `SERIESS_LOG=quiet` mostra só avisos; `SERIESS_LOG=debug` mostra também o JIT e as
@@ -140,6 +142,31 @@ jogos usam Oodle Kraken (proprietário). O XLZ é um codec próprio da família 
 com blocos independentes de 64 KiB. Ele reproduz o que importa para a simulação
 (paralelismo por bloco, decodificação rápida, taxa de 2–4× em dados de jogo), mas
 não lê arquivos Kraken/BCPack.
+
+## Firmware do sistema (OSU1)
+
+O emulador aceita o firmware oficial do console a partir da **Atualização Offline
+do Sistema** (OSU1, OSU2 ou OSU3), que a Microsoft distribui gratuitamente no site
+de suporte do Xbox. Baixe o arquivo direto da Microsoft; o projeto não distribui
+firmware.
+
+1. Na interface: **SISTEMA → Instalar firmware (OSU1)**, e escolha o `.zip` ou a
+   pasta já extraída. O zip é extraído em segundo plano, com barra de progresso e
+   proteção contra caminhos maliciosos (zip-slip).
+2. Pela CLI: extraia o zip e rode `xss-emu fwinstall <pasta>`. A pasta pode ser a
+   `$SystemUpdate` ou a pasta que a contém.
+
+O instalador lê o cabeçalho de cada `.xvd`, recusa a pasta se os pacotes não forem
+do sistema (por exemplo, um jogo), descobre a versão pelo pacote `SystemOS` e
+instala em `~/.seriess-emu/firmware/<versão>/`. No boot, a fase DXE do UEFI
+registra o firmware instalado (`--firmware <pasta>` escolhe outro).
+
+**Limite importante:** os pacotes do sistema são criptografados e assinados com
+chaves que só existem no hardware do console. O SeriesS-Emu não tem essas chaves
+nem tenta contornar a proteção. O firmware é validado, inventariado e
+versionado, mas a execução continua pelo kernel em HLE. A versão vem do campo
+`PackageVersion` do cabeçalho XVD, cujo layout segue a documentação pública
+do xvdtool, e pode não bater com o número mostrado no console.
 
 ## Interface
 

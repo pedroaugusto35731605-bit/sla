@@ -66,6 +66,16 @@ RDNA 2 · 20 CUs · 4 TFLOPS
        <item><widget class="QProgressBar" name="ssdBar"><property name="textVisible"><bool>false</bool></property></widget></item>
        <item><widget class="QLabel" name="ssdInfo"><property name="wordWrap"><bool>true</bool></property><property name="text"><string>0 GB de 512 GB</string></property></widget></item>
        <item>
+        <spacer name="ssdSpacer">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>10</width><height>18</height></size></property>
+        </spacer>
+       </item>
+       <item><widget class="QLabel" name="sectionSys"><property name="text"><string>SISTEMA</string></property></widget></item>
+       <item><widget class="QLabel" name="fwInfo"><property name="wordWrap"><bool>true</bool></property><property name="text"><string>Firmware: não instalado</string></property></widget></item>
+       <item><widget class="QPushButton" name="btnFirmware"><property name="text"><string>Instalar firmware (OSU1)</string></property></widget></item>
+       <item>
         <spacer name="railSpacer">
          <property name="orientation"><enum>Qt::Vertical</enum></property>
          <property name="sizeHint" stdset="0"><size><width>10</width><height>40</height></size></property>

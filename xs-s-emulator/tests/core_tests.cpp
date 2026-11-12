@@ -8,6 +8,7 @@
 #include "log.hpp"
 #include "memory_manager.hpp"
 #include "ssd_io.hpp"
+#include "../filesystem/firmware.hpp"
 #include "../filesystem/image_builder.hpp"
 #include "../filesystem/iso_parser.hpp"
 #include "../filesystem/texture_streamer.hpp"
@@ -264,6 +265,51 @@ int main() {
         const auto& t1 = st.texture(1);
         CHECK(t1.resident[0] != 0);
         std::filesystem::remove(iso);
+    });
+
+    test("firmware OSU1: validação, versão, instalação e recusa de pacotes de jogo", [&] {
+        namespace fsys = std::filesystem;
+        const auto base = fsys::temp_directory_path() / "xss_fw_test";
+        fsys::remove_all(base);
+        // Cabeçalho XVD sintético: magic em 0x200, drive size, tipo de conteúdo e versão.
+        auto fake_xvd = [](const fsys::path& p, std::uint32_t type, std::uint16_t major, std::uint16_t build) {
+            fsys::create_directories(p.parent_path());
+            std::vector<std::uint8_t> h(0x1000, 0);
+            std::memcpy(h.data() + 0x200, "msft-xvd", 8);
+            const std::uint64_t drive = 64 * MiB;
+            std::memcpy(h.data() + 0x218, &drive, 8);
+            std::memcpy(h.data() + 0x284, &type, 4);
+            const std::uint16_t ver[4] = {0, 0, build, major};   // a.b.c.d gravado ao contrário
+            std::memcpy(h.data() + 0x3BC, ver, 8);
+            std::ofstream(p, std::ios::binary).write(reinterpret_cast<const char*>(h.data()), static_cast<std::streamsize>(h.size()));
+        };
+        const auto osu = base / "OSU1" / "$SystemUpdate";
+        fake_xvd(osu / "system.xvd", 2, 10, 25398);     // SystemOS
+        fake_xvd(osu / "host.xvd", 7, 10, 25398);       // HostOS
+        fake_xvd(osu / "systemtools.xvd", 19, 10, 25398);
+        std::ofstream(osu / "notas.txt") << "arquivo auxiliar";
+
+        const auto info = fs::inspect_system_update(base / "OSU1");   // aceita a pasta pai
+        CHECK(info.valid);
+        CHECK(info.root.filename() == "$SystemUpdate");
+        CHECK(info.version == "10.25398.0.0");
+        CHECK(info.system_packages == 3);
+        CHECK(info.packages.size() == 4);
+
+        const auto root = base / "firmware";
+        const auto inst = fs::install_system_update(base / "OSU1", root);
+        CHECK(inst.valid);
+        CHECK(fsys::exists(root / "10.25398.0.0" / "$SystemUpdate" / "system.xvd"));
+        const auto cur = fs::installed_firmware(root);
+        CHECK(cur && cur->version == "10.25398.0.0");
+
+        // Pasta só com pacote de jogo (tipo Title) é recusada
+        fake_xvd(base / "jogo" / "game.xvc", 1, 1, 0);
+        const auto bad = fs::inspect_system_update(base / "jogo");
+        CHECK(!bad.valid);
+        CHECK(bad.error.find("não são do sistema") != std::string::npos);
+        CHECK(!fs::inspect_system_update(base / "nao_existe").valid);
+        fsys::remove_all(base);
     });
 
     test("boot da ROM de diagnóstico: o título estoura o orçamento e o kernel nega", [&] {

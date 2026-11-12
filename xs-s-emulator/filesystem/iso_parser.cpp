@@ -236,23 +236,35 @@ const FileEntry* find_file(const std::vector<FileEntry>& files, const std::strin
     return nullptr;
 }
 
+// Layout do cabeçalho conforme documentado pelo projeto xvdtool (best-effort).
+std::optional<XvdHeader> decode_xvd_header(const std::uint8_t* h) {
+    if (std::memcmp(h + 0x200, "msft-xvd", 8) != 0) return std::nullopt;
+    XvdHeader x;
+    x.format_version  = le<std::uint32_t>(h + 0x20C);
+    x.drive_size      = le<std::uint64_t>(h + 0x218);
+    x.vduid           = guid_str(h + 0x220);
+    x.content_type_id = le<std::uint32_t>(h + 0x284);
+    x.content_type    = xvd_content_type(x.content_type_id);
+    x.product_id      = guid_str(h + 0x39C);
+    const auto v = h + 0x3BC;
+    x.version = std::format("{}.{}.{}.{}", le<std::uint16_t>(v + 6), le<std::uint16_t>(v + 4),
+                            le<std::uint16_t>(v + 2), le<std::uint16_t>(v));
+    return x;
+}
+
 bool parse_xvd(NvmeReader& r, GameMetadata& m) {
     std::uint8_t h[0x400];
     if (r.size() < sizeof(h) || !r.read(0, h, sizeof(h))) return false;
-    if (std::memcmp(h + 0x200, "msft-xvd", 8) != 0) return false;
-
-    // Layout do cabeçalho conforme documentado pelo projeto xvdtool (best-effort).
+    const auto x = decode_xvd_header(h);
+    if (!x) return false;
     m.format       = ImageFormat::Xvd;
-    m.content_id   = guid_str(h + 0x220);                     // VDUID
-    m.content_type = xvd_content_type(le<std::uint32_t>(h + 0x284));
-    m.product_id   = guid_str(h + 0x39C);
-    const auto drive_size = le<std::uint64_t>(h + 0x218);
-    const auto v = h + 0x3BC;
-    m.version = std::format("{}.{}.{}.{}", le<std::uint16_t>(v + 6), le<std::uint16_t>(v + 4),
-                            le<std::uint16_t>(v + 2), le<std::uint16_t>(v));
+    m.content_id   = x->vduid;
+    m.content_type = x->content_type;
+    m.product_id   = x->product_id;
+    m.version      = x->version;
     m.metadata_source = "XVD header";
     m.warnings.push_back(std::format("Pacote XVD/XVC: conteúdo criptografado (drive {} MiB); "
-                                     "apenas metadados de cabeçalho foram lidos.", drive_size / (1024 * 1024)));
+                                     "apenas metadados de cabeçalho foram lidos.", x->drive_size / (1024 * 1024)));
     return true;
 }
 
@@ -289,6 +301,13 @@ std::vector<std::uint8_t> NvmeReader::read_vec(std::uint64_t offset, std::uint64
     std::vector<std::uint8_t> v(len);
     if (!read(offset, v.data(), len)) v.clear();
     return v;
+}
+
+std::optional<XvdHeader> read_xvd_header(const std::filesystem::path& file) {
+    NvmeReader r(file);
+    std::uint8_t h[0x400];
+    if (!r.ok() || r.size() < sizeof(h) || !r.read(0, h, sizeof(h))) return std::nullopt;
+    return decode_xvd_header(h);
 }
 
 GameMetadata IsoParser::parse(const std::filesystem::path& image) {

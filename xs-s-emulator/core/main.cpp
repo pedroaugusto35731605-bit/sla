@@ -10,6 +10,7 @@
 #include "log.hpp"
 #include "memory_manager.hpp"
 #include "ssd_io.hpp"
+#include "../filesystem/firmware.hpp"
 #include "../filesystem/image_builder.hpp"
 #include "../filesystem/iso_parser.hpp"
 #include "../filesystem/texture_streamer.hpp"
@@ -31,12 +32,14 @@ void usage() {
         "SeriesS-Emu 0.1 — emulador experimental de Xbox Series S\n"
         "uso:\n"
         "  xss-emu spec                                   especificações emuladas\n"
-        "  xss-emu boot [--jit] [--quiet] [--max N] [--image app.xbin] [--vk-validation]\n"
+        "  xss-emu boot [--jit] [--quiet] [--max N] [--image app.xbin] [--firmware pasta] [--vk-validation]\n"
         "  xss-emu mkimage <saida.iso> [--textures N] [--title NOME] [--title-id ID]\n"
         "  xss-emu info <imagem> [--files] [--thumbnail capa.png]  metadados + tags em JSON\n"
         "  xss-emu bench <imagem>                         carga DirectStorage e comparação HDD/SATA/NVMe\n"
         "  xss-emu stream <imagem> [--frames N] [--heap GiB]  streaming de texturas sob o limite de 7 GB\n"
         "  xss-emu memtest [--chunk MiB]                  estoura o orçamento de 7 GB de propósito\n"
+        "  xss-emu fwinfo [pasta]                         inspeciona um OSU1 extraído (sem argumento: o instalado)\n"
+        "  xss-emu fwinstall <pasta> [--move]             instala o firmware do OSU1 ($SystemUpdate)\n"
         "\nvariável SERIESS_LOG=quiet|debug ajusta o log");
 }
 
@@ -79,6 +82,21 @@ int cmd_boot(const Args& a) {
     CpuCluster    cpu(mem, kernel);
     SsdDevice     ssd;
     UefiFirmware  fw(mem, cpu, gpu, ssd);
+
+    // Firmware oficial (OSU1): --firmware <pasta> ou o instalado em $XSS_HOME/firmware
+    std::optional<fs::FirmwareInfo> sysfw;
+    if (const auto p = opt(a, "--firmware"); !p.empty()) {
+        auto f = fs::inspect_system_update(std::string(p));
+        if (!f.valid) log_warn("UEFI", "firmware ignorado: {}", f.error);
+        else sysfw = std::move(f);
+    } else {
+        sysfw = fs::installed_firmware(fs::default_firmware_root());
+    }
+    if (sysfw) {
+        SystemSoftware s{sysfw->version, sysfw->root.string(), {}, sysfw->total_bytes};
+        for (const auto& p : sysfw->packages) if (p.xvd) s.packages.push_back(p.xvd->content_type);
+        fw.set_system_software(std::move(s));
+    }
 
     if (!fw.power_on_self_test()) return 2;
     fw.initialize_devices(has(a, "--vk-validation"));
@@ -273,6 +291,34 @@ int cmd_stream(const Args& a) {
 }
 
 // ----------------------------------------------------------------------------
+int cmd_fwinfo(const Args& a) {
+    std::optional<fs::FirmwareInfo> f;
+    if (a.empty()) {
+        f = fs::installed_firmware(fs::default_firmware_root());
+        if (!f) { std::puts("{\"valid\":false,\"error\":\"nenhum firmware instalado\"}"); return 6; }
+    } else {
+        f = fs::inspect_system_update(std::string(a[0]));
+    }
+    std::puts(fs::to_json(*f).c_str());
+    return f->valid ? 0 : 6;
+}
+
+int cmd_fwinstall(const Args& a) {
+    if (a.empty()) { usage(); return 1; }
+    const auto root = fs::default_firmware_root();
+    std::filesystem::create_directories(root);
+    const auto f = fs::install_system_update(std::string(a[0]), root, has(a, "--move"),
+        [](std::uint64_t done, std::uint64_t total, const std::string& file) {
+            if (!file.empty()) log_info("FW", "copiando {} ({} de {})", file, human_bytes(done), human_bytes(total));
+        });
+    if (!f.valid) { log_error("FW", "instalação recusada: {}", f.error); std::puts(fs::to_json(f).c_str()); return 6; }
+    for (const auto& w : f.warnings) log_warn("FW", "{}", w);
+    log_info("FW", "firmware {} instalado em {} ({} pacotes do sistema, {})", f.version, f.root.string(),
+             f.system_packages, human_bytes(f.total_bytes));
+    std::puts(fs::to_json(f).c_str());
+    return 0;
+}
+
 int cmd_memtest(const Args& a) {
     MemoryManager mem;
     const std::uint64_t chunk = opt_u64(a, "--chunk", 512) * spec::MiB;
@@ -306,6 +352,8 @@ int main(int argc, char** argv) {
         if (cmd == "bench")   return cmd_bench(args);
         if (cmd == "stream")  return cmd_stream(args);
         if (cmd == "memtest") return cmd_memtest(args);
+        if (cmd == "fwinfo")  return cmd_fwinfo(args);
+        if (cmd == "fwinstall") return cmd_fwinstall(args);
         usage();
         return 1;
     } catch (const std::exception& e) {

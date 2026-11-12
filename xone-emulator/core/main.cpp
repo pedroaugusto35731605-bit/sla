@@ -164,7 +164,14 @@ int cmd_extract(const std::vector<std::string_view>& args) {
 }  // namespace
 
 int main(int argc, char** argv) {
+#if defined(_WIN32)
+    // A CRT do Windows não tem buffer de linha (_IOLBF vira _IOFBF) e exige tamanho >= 2:
+    // com 0 ela aborta o programa antes de imprimir qualquer coisa (0xC0000417).
+    // Sem buffer, a UI recebe cada linha do log na hora.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+#else
     std::setvbuf(stdout, nullptr, _IOLBF, 0);
+#endif
     if (argc < 2) { usage(); return 1; }
     const std::string_view cmd = argv[1];
     const std::vector<std::string_view> args(argv + 2, argv + argc);

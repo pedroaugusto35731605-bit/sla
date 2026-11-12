@@ -490,6 +490,9 @@ _NTSTATUS = {
                  "Atualize o driver da placa de vídeo ou instale o Vulkan Runtime/SDK; ou recompile sem "
                  "Vulkan:\n\ncmake -S . -B build -DXSS_ENABLE_VULKAN=OFF -DXSS_NATIVE_ZEN2=OFF\n"
                  "cmake --build build --config Release"),
+    0xC0000417: ("parâmetro inválido na biblioteca C do Windows",
+                 "Esse era um bug do SeriesS-Emu em qualquer Windows (corrigido). Baixe a versão nova do código "
+                 "e recompile o núcleo:\n\ncmake --build build --config Release"),
     0xC0000005: ("acesso inválido à memória", "O núcleo travou. Rode o comando abaixo no terminal e envie a saída."),
     0xC0000409: ("falha interna (fail-fast)", "O núcleo abortou. Rode o comando abaixo no terminal e envie a saída."),
 }

@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SeriesS-Emu — layout da janela principal (editável no Qt Designer).
+     Carregado por main_window.py via PyQt6.uic.loadUi; o estilo fica em código. -->
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>1320</width><height>820</height></rect></property>
+  <property name="minimumSize"><size><width>1000</width><height>640</height></size></property>
+  <property name="windowTitle"><string>SeriesS-Emu</string></property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="rootLayout">
+    <property name="spacing"><number>0</number></property>
+    <property name="leftMargin"><number>0</number></property>
+    <property name="topMargin"><number>0</number></property>
+    <property name="rightMargin"><number>0</number></property>
+    <property name="bottomMargin"><number>0</number></property>
+
+    <!-- ===== Coluna do sistema ===== -->
+    <item>
+     <widget class="QFrame" name="rail">
+      <property name="minimumSize"><size><width>248</width><height>0</height></size></property>
+      <property name="maximumSize"><size><width>248</width><height>16777215</height></size></property>
+      <layout class="QVBoxLayout" name="railLayout">
+       <property name="spacing"><number>6</number></property>
+       <property name="leftMargin"><number>22</number></property>
+       <property name="topMargin"><number>26</number></property>
+       <property name="rightMargin"><number>22</number></property>
+       <property name="bottomMargin"><number>20</number></property>
+       <item><widget class="QLabel" name="brand"><property name="text"><string>SERIES S</string></property></widget></item>
+       <item><widget class="QLabel" name="brandSub"><property name="text"><string>EMU · 0.1</string></property></widget></item>
+       <item>
+        <spacer name="brandSpacer">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>10</width><height>28</height></size></property>
+        </spacer>
+       </item>
+       <item><widget class="QLabel" name="sectionHw"><property name="text"><string>HARDWARE</string></property></widget></item>
+       <item>
+        <widget class="QLabel" name="hwInfo">
+         <property name="wordWrap"><bool>true</bool></property>
+         <property name="text"><string>Zen 2 · 8C/16T · 3,4 GHz
+RDNA 2 · 20 CUs · 4 TFLOPS
+10 GB GDDR6 unificada
+1440p → 4K upscaling</string></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="hwSpacer">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>10</width><height>18</height></size></property>
+        </spacer>
+       </item>
+       <item><widget class="QLabel" name="sectionMem"><property name="text"><string>MEMÓRIA</string></property></widget></item>
+       <item><widget class="QWidget" name="memBar" native="true"><property name="minimumSize"><size><width>0</width><height>10</height></size></property></widget></item>
+       <item><widget class="QLabel" name="memInfo"><property name="wordWrap"><bool>true</bool></property><property name="text"><string>7 GB título · 3 GB sistema</string></property></widget></item>
+       <item>
+        <spacer name="memSpacer">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>10</width><height>18</height></size></property>
+        </spacer>
+       </item>
+       <item><widget class="QLabel" name="sectionSsd"><property name="text"><string>ARMAZENAMENTO</string></property></widget></item>
+       <item><widget class="QProgressBar" name="ssdBar"><property name="textVisible"><bool>false</bool></property></widget></item>
+       <item><widget class="QLabel" name="ssdInfo"><property name="wordWrap"><bool>true</bool></property><property name="text"><string>0 GB de 512 GB</string></property></widget></item>
+       <item>
+        <spacer name="railSpacer">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>10</width><height>40</height></size></property>
+        </spacer>
+       </item>
+       <item><widget class="QLabel" name="coreStatus"><property name="wordWrap"><bool>true</bool></property><property name="text"><string>Núcleo: procurando…</string></property></widget></item>
+      </layout>
+     </widget>
+    </item>
+
+    <!-- ===== Conteúdo ===== -->
+    <item>
+     <widget class="QFrame" name="content">
+      <layout class="QVBoxLayout" name="contentLayout">
+       <property name="spacing"><number>16</number></property>
+       <property name="leftMargin"><number>32</number></property>
+       <property name="topMargin"><number>26</number></property>
+       <property name="rightMargin"><number>32</number></property>
+       <property name="bottomMargin"><number>18</number></property>
+
+       <item>
+        <layout class="QHBoxLayout" name="header">
+         <item><widget class="QLabel" name="pageTitle"><property name="text"><string>Biblioteca</string></property></widget></item>
+         <item><widget class="QLabel" name="gameCount"><property name="text"><string>0</string></property></widget></item>
+         <item>
+          <spacer name="headerSpacer">
+           <property name="orientation"><enum>Qt::Horizontal</enum></property>
+           <property name="sizeHint" stdset="0"><size><width>40</width><height>10</height></size></property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="searchBox">
+           <property name="minimumSize"><size><width>240</width><height>0</height></size></property>
+           <property name="placeholderText"><string>Buscar</string></property>
+           <property name="clearButtonEnabled"><bool>true</bool></property>
+          </widget>
+         </item>
+         <item><widget class="QPushButton" name="btnImport"><property name="text"><string>Importar ISO</string></property></widget></item>
+        </layout>
+       </item>
+
+       <!-- Instalar a partir de URL -->
+       <item>
+        <widget class="QFrame" name="installCard">
+         <layout class="QVBoxLayout" name="installLayout">
+          <property name="spacing"><number>10</number></property>
+          <property name="leftMargin"><number>18</number></property>
+          <property name="topMargin"><number>16</number></property>
+          <property name="rightMargin"><number>18</number></property>
+          <property name="bottomMargin"><number>16</number></property>
+          <item><widget class="QLabel" name="installTitle"><property name="text"><string>BAIXAR ISO</string></property></widget></item>
+          <item>
+           <layout class="QHBoxLayout" name="installRow">
+            <property name="spacing"><number>10</number></property>
+            <item>
+             <widget class="QLineEdit" name="urlInput">
+              <property name="placeholderText"><string>https://exemplo.com/jogos/titulo.iso  ·  link direto .iso ou .xvc</string></property>
+              <property name="clearButtonEnabled"><bool>true</bool></property>
+             </widget>
+            </item>
+            <item><widget class="QPushButton" name="btnInstall"><property name="text"><string>Download &amp;&amp; Install</string></property></widget></item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QWidget" name="installQueue" native="true">
+            <layout class="QVBoxLayout" name="queueLayout">
+             <property name="spacing"><number>10</number></property>
+             <property name="leftMargin"><number>0</number></property>
+             <property name="topMargin"><number>0</number></property>
+             <property name="rightMargin"><number>0</number></property>
+             <property name="bottomMargin"><number>0</number></property>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+
+       <!-- Lista + detalhes -->
+       <item>
+        <widget class="QSplitter" name="splitter">
+         <property name="orientation"><enum>Qt::Horizontal</enum></property>
+         <property name="childrenCollapsible"><bool>false</bool></property>
+         <widget class="QStackedWidget" name="listStack">
+          <widget class="QListWidget" name="gameList"/>
+          <widget class="QLabel" name="emptyState">
+           <property name="alignment"><set>Qt::AlignCenter</set></property>
+           <property name="wordWrap"><bool>true</bool></property>
+           <property name="text"><string>Nenhum jogo instalado.</string></property>
+          </widget>
+         </widget>
+         <widget class="QFrame" name="detailPanel">
+          <property name="minimumSize"><size><width>330</width><height>0</height></size></property>
+          <property name="maximumSize"><size><width>380</width><height>16777215</height></size></property>
+          <layout class="QVBoxLayout" name="detailLayout">
+           <property name="spacing"><number>10</number></property>
+           <property name="leftMargin"><number>22</number></property>
+           <property name="topMargin"><number>22</number></property>
+           <property name="rightMargin"><number>22</number></property>
+           <property name="bottomMargin"><number>22</number></property>
+           <item><widget class="QLabel" name="detailCover"><property name="minimumSize"><size><width>0</width><height>120</height></size></property><property name="alignment"><set>Qt::AlignLeft|Qt::AlignTop</set></property></widget></item>
+           <item><widget class="QLabel" name="detailTitle"><property name="wordWrap"><bool>true</bool></property><property name="text"><string>Selecione um jogo</string></property></widget></item>
+           <item><widget class="QLabel" name="detailPublisher"><property name="text"><string/></property></widget></item>
+           <item><widget class="QLabel" name="detailTags"><property name="wordWrap"><bool>true</bool></property><property name="text"><string/></property></widget></item>
+           <item>
+            <widget class="QFrame" name="specsFrame">
+             <layout class="QFormLayout" name="specsLayout">
+              <property name="horizontalSpacing"><number>18</number></property>
+              <property name="verticalSpacing"><number>8</number></property>
+              <item row="0" column="0"><widget class="QLabel" name="kRes"><property name="text"><string>Resolução</string></property></widget></item>
+              <item row="0" column="1"><widget class="QLabel" name="detailResolution"><property name="text"><string>—</string></property></widget></item>
+              <item row="1" column="0"><widget class="QLabel" name="kFps"><property name="text"><string>FPS alvo</string></property></widget></item>
+              <item row="1" column="1"><widget class="QLabel" name="detailFps"><property name="text"><string>—</string></property></widget></item>
+              <item row="2" column="0"><widget class="QLabel" name="kTid"><property name="text"><string>Title ID</string></property></widget></item>
+              <item row="2" column="1"><widget class="QLabel" name="detailTitleId"><property name="text"><string>—</string></property></widget></item>
+              <item row="3" column="0"><widget class="QLabel" name="kSize"><property name="text"><string>Tamanho</string></property></widget></item>
+              <item row="3" column="1"><widget class="QLabel" name="detailSize"><property name="text"><string>—</string></property></widget></item>
+              <item row="4" column="0"><widget class="QLabel" name="kFmt"><property name="text"><string>Formato</string></property></widget></item>
+              <item row="4" column="1"><widget class="QLabel" name="detailFormat"><property name="text"><string>—</string></property></widget></item>
+              <item row="5" column="0"><widget class="QLabel" name="kSrc"><property name="text"><string>Origem</string></property></widget></item>
+              <item row="5" column="1"><widget class="QLabel" name="detailSource"><property name="text"><string>—</string></property></widget></item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <spacer name="detailSpacer">
+             <property name="orientation"><enum>Qt::Vertical</enum></property>
+             <property name="sizeHint" stdset="0"><size><width>10</width><height>10</height></size></property>
+            </spacer>
+           </item>
+           <item><widget class="QPushButton" name="btnLaunch"><property name="text"><string>Iniciar</string></property><property name="enabled"><bool>false</bool></property></widget></item>
+           <item>
+            <layout class="QHBoxLayout" name="secondaryActions">
+             <item><widget class="QPushButton" name="btnBench"><property name="text"><string>Benchmark de I/O</string></property><property name="enabled"><bool>false</bool></property></widget></item>
+             <item><widget class="QPushButton" name="btnRemove"><property name="text"><string>Remover</string></property><property name="enabled"><bool>false</bool></property></widget></item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

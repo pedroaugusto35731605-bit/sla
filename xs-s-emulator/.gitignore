@@ -1,0 +1,7 @@
+build/*
+!build/.gitkeep
+__pycache__/
+*.pyc
+.venv/
+*.iso
+*.xvc

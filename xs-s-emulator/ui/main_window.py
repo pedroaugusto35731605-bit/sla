@@ -479,6 +479,39 @@ def installed_firmware_version(lib_root: Path) -> str | None:
     return v or None
 
 
+# Códigos de saída do Windows (NTSTATUS) mais comuns quando o núcleo nem chega a rodar.
+_NTSTATUS = {
+    0xC000001D: ("instrução ilegal",
+                 "O núcleo foi compilado para Zen 2 (-march=znver2 ou /arch:AVX2) e o seu processador não "
+                 "suporta essas instruções. Recompile o núcleo de forma portável:\n\n"
+                 "cmake -S . -B build -DXSS_NATIVE_ZEN2=OFF\ncmake --build build --config Release"),
+    0xC0000135: ("DLL não encontrada",
+                 "Falta uma biblioteca para o núcleo iniciar — quase sempre a do Vulkan (vulkan-1.dll). "
+                 "Atualize o driver da placa de vídeo ou instale o Vulkan Runtime/SDK; ou recompile sem "
+                 "Vulkan:\n\ncmake -S . -B build -DXSS_ENABLE_VULKAN=OFF -DXSS_NATIVE_ZEN2=OFF\n"
+                 "cmake --build build --config Release"),
+    0xC0000005: ("acesso inválido à memória", "O núcleo travou. Rode o comando abaixo no terminal e envie a saída."),
+    0xC0000409: ("falha interna (fail-fast)", "O núcleo abortou. Rode o comando abaixo no terminal e envie a saída."),
+}
+
+
+def explain_core_failure(core: str, args: list[str], code: int, crashed: bool, output: list[str]) -> str:
+    """Mensagem útil quando o núcleo termina com erro, em vez de um texto genérico."""
+    cmd = f'"{core}" ' + " ".join(f'"{a}"' if " " in a else a for a in args)
+    tail = "\n".join(l for l in output[-8:] if l.strip())
+    ntstatus = code & 0xFFFFFFFF
+    if ntstatus in _NTSTATUS:
+        name, hint = _NTSTATUS[ntstatus]
+        return f"O núcleo fechou ao iniciar: {name} (código 0x{ntstatus:08X}).\n\n{hint}\n\nComando:\n{cmd}"
+    if crashed:
+        why = ("Sem nenhuma saída, a causa mais comum é o binário compilado para Zen 2 rodando em outro "
+               "processador. Recompile com -DXSS_NATIVE_ZEN2=OFF.") if not tail else tail
+        return f"O núcleo travou (crash).\n\n{why}\n\nPara ver o erro completo, rode no terminal:\n{cmd}"
+    if tail:
+        return f"O núcleo terminou com código {code}:\n\n{tail}"
+    return (f"O núcleo terminou com código {code} sem imprimir nada. Rode no terminal para ver o erro:\n{cmd}")
+
+
 class ZipExtractor(QObject):
     """Extrai o OSU1.zip numa thread, emitindo progresso. Protegido contra zip-slip."""
 
@@ -584,10 +617,21 @@ class CoreConsole(QDialog):
         self.proc = QProcess(self)
         self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.proc.readyReadStandardOutput.connect(self._read)
-        self.proc.finished.connect(lambda code, _s: self.status.setText(f"Núcleo encerrado (código {code})"))
+        self.proc.finished.connect(self._finished)
+        self._core, self._args = core, args
         stop.clicked.connect(self.proc.kill)
         self.out.appendPlainText(f"$ {Path(core).name} {' '.join(args)}")
         self.proc.start(core, args)
+
+    def _finished(self, code: int, status) -> None:
+        self._read()
+        crashed = status == QProcess.ExitStatus.CrashExit
+        if crashed or (code & 0xFFFFFFFF) in _NTSTATUS:
+            lines = self.out.toPlainText().splitlines()[1:]
+            self.out.appendPlainText("\n" + explain_core_failure(self._core, self._args, code, crashed, lines))
+            self.status.setText("O núcleo travou — veja a explicação acima")
+        else:
+            self.status.setText(f"Núcleo encerrado (código {code})")
 
     def _read(self) -> None:
         self.out.moveCursor(QTextCursor.MoveOperation.End)
@@ -789,13 +833,21 @@ class MainWindow(QMainWindow):
         if self.core:
             thumb = self.library.root / "thumbnails" / f"{gid}.png"
             proc = QProcess(self)
-            proc.start(self.core, ["info", str(p), "--thumbnail", str(thumb)])
+            args = ["info", str(p), "--thumbnail", str(thumb)]
+            proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            proc.start(self.core, args)
+            if not proc.waitForStarted(10000):
+                QMessageBox.critical(self, "Falha ao importar", f"Não foi possível iniciar o núcleo:\n{proc.errorString()}")
+                return False
             proc.waitForFinished(30000)
             out = bytes(proc.readAllStandardOutput()).decode("utf-8", "replace").strip()
+            json_lines = [l for l in out.splitlines() if l.startswith("{")]
             try:
-                meta = json.loads(out.splitlines()[-1])
+                meta = json.loads(json_lines[-1])
             except (ValueError, IndexError):
-                QMessageBox.critical(self, "Falha ao importar", out or "O núcleo não conseguiu ler a imagem.")
+                QMessageBox.critical(self, "Falha ao importar", explain_core_failure(
+                    self.core, args, proc.exitCode(), proc.exitStatus() == QProcess.ExitStatus.CrashExit,
+                    out.splitlines()))
                 return False
             if meta.get("format") == "Unknown":
                 QMessageBox.warning(self, "Formato desconhecido",
@@ -903,7 +955,10 @@ class MainWindow(QMainWindow):
                 if "copiando" in line:                           # progresso da cópia de uma pasta
                     row.set_progress(0, 0, line.split("] ", 2)[-1][:70])
 
-        def on_finished(code: int, _status) -> None:
+        args = ["fwinstall", str(source)] + (["--move"] if move else [])
+
+        def on_finished(code: int, status) -> None:
+            on_output()                                          # o que sobrou no buffer
             self._fw_busy = False
             row.cancel_btn.hide()
             info = {}
@@ -916,10 +971,15 @@ class MainWindow(QMainWindow):
                     break
             if move:
                 shutil.rmtree(firmware_root(self.library.root) / "_incoming", ignore_errors=True)
+            crashed = status == QProcess.ExitStatus.CrashExit
+            if crashed or not info:
+                row.finish("Erro no núcleo", ok=False)
+                QMessageBox.warning(self, "Firmware não instalado",
+                                    explain_core_failure(self.core, args, code, crashed, out))
+                return
             if code != 0 or not info.get("valid"):
                 row.finish("Recusado", ok=False)
-                QMessageBox.warning(self, "Firmware não instalado",
-                                    info.get("error") or "\n".join(out[-5:]) or "o núcleo recusou a pasta")
+                QMessageBox.warning(self, "Firmware não instalado", f"O firmware foi recusado:\n\n{info.get('error')}")
                 return
             n = info.get("system_packages", 0)
             row.finish(f"Instalado  {info.get('version')}  ·  {n} pacotes  ·  {gb(info.get('total_bytes', 0))}")
@@ -929,8 +989,16 @@ class MainWindow(QMainWindow):
         proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         proc.readyReadStandardOutput.connect(on_output)
         proc.finished.connect(on_finished)
+
+        def on_error(err) -> None:
+            if err == QProcess.ProcessError.FailedToStart:       # finished não é emitido nesse caso
+                self._fw_busy = False
+                row.finish("Erro no núcleo", ok=False)
+                QMessageBox.warning(self, "Firmware não instalado",
+                                    f"Não foi possível iniciar o núcleo:\n{self.core}\n\n{proc.errorString()}")
+
+        proc.errorOccurred.connect(on_error)
         row.cancel_btn.clicked.connect(proc.kill)
-        args = ["fwinstall", str(source)] + (["--move"] if move else [])
         proc.start(self.core, args)
 
     def _need_core(self) -> bool:

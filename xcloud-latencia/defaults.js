@@ -2,7 +2,7 @@
 var XCL_DEFAULTS = {
   enabled: true,        // liga/desliga tudo
   minBuffer: true,      // buffer de jitter do vídeo/áudio no mínimo
-  codec: "h264",        // "h264" | "auto"
+  codec: "hw",          // "hw" | "h264-high" | "h264-baseline" | "auto"
   overlay: true,        // painel de latência na tela
   lite: true            // desliga efeitos visuais pesados (blur/animações)
 };

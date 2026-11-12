@@ -26,11 +26,14 @@
       <span>Buffer de vídeo mínimo<small>Mostra cada quadro assim que chega. Maior ganho; pode dar pequenos engasgos em Wi-Fi instável.</small></span></label>
 
     <div class="opt dep" style="display:block;padding:8px 0;border-bottom:1px solid #222">
-      Codec de vídeo
+      Codec / decodificação
       <select id="codec">
-        <option value="h264">Preferir H.264 (decodificação por hardware)</option>
-        <option value="auto">Automático (o que o Xbox escolher)</option>
+        <option value="hw">Melhor para minha placa de vídeo (recomendado)</option>
+        <option value="h264-high">H.264 High: melhor imagem</option>
+        <option value="h264-baseline">H.264 Baseline: decodificação mais leve</option>
+        <option value="auto">Não mexer (padrão do Xbox)</option>
       </select>
+      <small>"Melhor para minha placa" testa o que sua GPU decodifica sozinha. Sem GPU compatível, usa o perfil mais leve.</small>
     </div>
 
     <label class="opt dep"><input type="checkbox" id="overlay">

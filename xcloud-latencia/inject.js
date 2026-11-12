@@ -3,9 +3,9 @@
 // stream para:
 //   1. reduzir o buffer de jitter (o "atraso de segurança" que o navegador
 //      segura antes de mostrar cada quadro) ao mínimo;
-//   2. preferir H.264, que quase sempre é decodificado pelo hardware da placa
-//      de vídeo, com menos atraso de decodificação;
-//   3. medir e mostrar a latência real (ping, buffer, decodificação, FPS...).
+//   2. escolher o codec/perfil que a placa de vídeo do PC decodifica por
+//      hardware (ou, sem hardware, o perfil mais leve de decodificar);
+//   3. medir e mostrar a latência real (ping, buffer, decodificação, tela...).
 (() => {
   if (window.__xclInstalled) return;
   window.__xclInstalled = true;
@@ -13,7 +13,7 @@
   const OrigPC = window.RTCPeerConnection;
   if (!OrigPC) return;
 
-  let settings = { enabled: true, minBuffer: true, codec: "h264", overlay: true, lite: true };
+  let settings = { enabled: true, minBuffer: true, codec: "hw", overlay: true, lite: true };
   const peers = new Set();
 
   // ---------- configurações vindas da extensão ----------
@@ -52,26 +52,83 @@
     } catch (_) {}
   }
 
-  // ---------- 2. preferência de codec ----------
+  // ---------- 2. codec e decodificação ----------
+  // Pergunta ao navegador, para cada codec que ele aceita, se a decodificação
+  // em 1080p60 é feita pela placa de vídeo ("powerEfficient" = hardware).
+  const decodeInfo = new Map(); // "mime|fmtp" -> { powerEfficient, smooth }
+  const isRealCodec = (c) => !/rtx|red|ulpfec|flexfec/i.test(c.mimeType);
+  const key = (c) => c.mimeType.toLowerCase() + "|" + (c.sdpFmtpLine || "");
+  const h264Profile = (c) => {
+    if (!/h264/i.test(c.mimeType)) return "";
+    const m = /profile-level-id=([0-9a-f]{2})/i.exec(c.sdpFmtpLine || "");
+    const p = m ? m[1].toLowerCase() : "";
+    return p === "42" ? "baseline" : p === "4d" ? "main" : p === "64" ? "high" : p === "f4" ? "high444" : "";
+  };
+
+  const hwReady = (async () => {
+    if (!navigator.mediaCapabilities || !window.RTCRtpReceiver || !RTCRtpReceiver.getCapabilities) return;
+    const caps = (RTCRtpReceiver.getCapabilities("video") || { codecs: [] }).codecs.filter(isRealCodec);
+    await Promise.all(caps.map(async (c) => {
+      const video = { width: 1920, height: 1080, bitrate: 20e6, framerate: 60 };
+      for (const contentType of [c.mimeType + (c.sdpFmtpLine ? ";" + c.sdpFmtpLine : ""), c.mimeType]) {
+        try {
+          const r = await navigator.mediaCapabilities.decodingInfo({ type: "webrtc", video: { ...video, contentType } });
+          if (r.supported) {
+            decodeInfo.set(key(c), { powerEfficient: !!r.powerEfficient, smooth: !!r.smooth });
+            return;
+          }
+        } catch (_) {}
+      }
+    }));
+  })();
+
+  const isHw = (c) => !!(decodeInfo.get(key(c)) || {}).powerEfficient;
+  const h264HasHw = () => {
+    for (const [k, v] of decodeInfo) if (k.startsWith("video/h264|") && v.powerEfficient) return true;
+    return false;
+  };
+
+  // Modo efetivo de ordenação a partir da configuração.
+  //   "hw"            -> codec com decodificação por hardware; se o H.264 não
+  //                      tiver hardware, usa o perfil Baseline (mais leve no software)
+  //   "h264"/"h264-high" -> H.264 perfil High (melhor imagem)
+  //   "h264-baseline" -> H.264 perfil Baseline (decodificação mais leve)
+  //   "auto"          -> não mexe
+  function codecMode() {
+    if (!settings.enabled) return "auto";
+    const m = settings.codec === "h264" ? "h264-high" : settings.codec;
+    if (m === "hw") return decodeInfo.size && !h264HasHw() ? "hw-baseline" : "hw-high";
+    return m;
+  }
+
+  const PROFILE_ORDER = {
+    high: { high: 4, main: 3, baseline: 2, high444: 1 },
+    baseline: { baseline: 4, main: 3, high: 2, high444: 1 }
+  };
+
   function sortCodecs(codecs) {
-    if (!settings.enabled || settings.codec !== "h264") return codecs;
-    const isH264 = (c) => /h264/i.test(c.mimeType);
-    // Entre os H.264, prefere o perfil "High" (4d/64) que tem decodificação
-    // por hardware e boa qualidade; depois os demais.
+    const mode = codecMode();
+    if (mode === "auto") return codecs;
+    const prof = mode.endsWith("baseline") ? "baseline" : "high";
+    const useHw = mode.startsWith("hw");
     const score = (c) => {
-      if (!isH264(c)) return 0;
-      const p = /profile-level-id=([0-9a-f]{2})/i.exec(c.sdpFmtpLine || "");
-      const prof = p ? p[1].toLowerCase() : "";
-      return prof === "64" || prof === "4d" ? 3 : 2;
+      if (!isRealCodec(c)) return 0; // rtx/red/fec ficam no fim, como de costume
+      let sc = 0;
+      if (useHw && isHw(c)) sc += 100;
+      if (/h264/i.test(c.mimeType)) sc += 10 + (PROFILE_ORDER[prof][h264Profile(c)] || 0);
+      return sc + 1;
     };
-    return codecs.slice().sort((a, b) => score(b) - score(a));
+    return codecs
+      .map((c, i) => [c, i])
+      .sort((x, y) => score(y[0]) - score(x[0]) || x[1] - y[1])
+      .map((x) => x[0]);
   }
 
   function applyCodecPrefs(pc) {
-    if (!settings.enabled || settings.codec !== "h264") return;
+    if (codecMode() === "auto") return;
     if (!window.RTCRtpReceiver || !RTCRtpReceiver.getCapabilities) return;
     const caps = RTCRtpReceiver.getCapabilities("video");
-    if (!caps || !caps.codecs.some((c) => /h264/i.test(c.mimeType))) return;
+    if (!caps) return;
     pc.getTransceivers().forEach((t) => {
       const kind = t.receiver && t.receiver.track && t.receiver.track.kind;
       if (kind !== "video" || !t.setCodecPreferences) return;
@@ -81,7 +138,7 @@
     });
   }
 
-  // Se o próprio site escolher codecs, reordena para colocar H.264 na frente.
+  // Se o próprio site escolher codecs, reordena a lista dele.
   const TP = window.RTCRtpTransceiver && RTCRtpTransceiver.prototype;
   const origSetCodecPrefs = TP && TP.setCodecPreferences;
   if (origSetCodecPrefs) {
@@ -92,16 +149,23 @@
   }
 
   // ---------- intercepta o RTCPeerConnection ----------
-  const origCreateOffer = OrigPC.prototype.createOffer;
-  OrigPC.prototype.createOffer = function (...args) {
-    applyCodecPrefs(this);
-    return origCreateOffer.apply(this, args);
-  };
-  const origCreateAnswer = OrigPC.prototype.createAnswer;
-  OrigPC.prototype.createAnswer = function (...args) {
-    applyCodecPrefs(this);
-    return origCreateAnswer.apply(this, args);
-  };
+  // Espera (no máximo 300 ms) o teste de hardware terminar antes de negociar.
+  const waitHw = () => Promise.race([hwReady, new Promise((r) => setTimeout(r, 300))]);
+  function wrapNegotiation(name) {
+    const orig = OrigPC.prototype[name];
+    OrigPC.prototype[name] = function (...args) {
+      if (typeof args[0] === "function") { // API antiga com callbacks
+        applyCodecPrefs(this);
+        return orig.apply(this, args);
+      }
+      return waitHw().then(() => {
+        applyCodecPrefs(this);
+        return orig.apply(this, args);
+      });
+    };
+  }
+  wrapNegotiation("createOffer");
+  wrapNegotiation("createAnswer");
 
   function track(pc) {
     peers.add(pc);
@@ -165,6 +229,40 @@
     }
   }, true);
 
+  // Mede, quadro a quadro, quanto tempo passa entre o quadro chegar pela rede
+  // e ser exibido (buffer + decodificação + desenho na tela).
+  const watchedVideos = new WeakSet();
+  let toScreenSum = 0, toScreenCount = 0;
+  function watchVideo() {
+    if (!HTMLVideoElement.prototype.requestVideoFrameCallback) return;
+    document.querySelectorAll("video").forEach((v) => {
+      if (watchedVideos.has(v) || !(v.srcObject instanceof MediaStream)) return;
+      watchedVideos.add(v);
+      const onFrame = (_now, meta) => {
+        if (meta.receiveTime && meta.expectedDisplayTime) {
+          const ms = meta.expectedDisplayTime - meta.receiveTime;
+          if (ms >= 0 && ms < 2000) { toScreenSum += ms; toScreenCount++; }
+        }
+        if (v.isConnected) v.requestVideoFrameCallback(onFrame);
+        else watchedVideos.delete(v);
+      };
+      v.requestVideoFrameCallback(onFrame);
+    });
+  }
+
+  // Hardware ou software? Usa o que o navegador informar nas estatísticas;
+  // se ele esconder, usa a previsão do teste feito ao carregar a página.
+  const SW_DECODERS = /libvpx|ffmpeg|openh264|dav1d|libaom|software/i;
+  function decoderKind(video, codec) {
+    if (typeof video.powerEfficientDecoder === "boolean") return video.powerEfficientDecoder ? "Hardware" : "Software";
+    if (video.decoderImplementation && SW_DECODERS.test(video.decoderImplementation)) return "Software";
+    if (codec) {
+      const info = decodeInfo.get(codec.mimeType.toLowerCase() + "|" + (codec.sdpFmtpLine || ""));
+      if (info) return info.powerEfficient ? "Hardware*" : "Software*";
+    }
+    return "?";
+  }
+
   const color = (v, good, ok) => (v <= good ? "#6f6" : v <= ok ? "#fd5" : "#f66");
   const fmt = (v, d = 0) => (Number.isFinite(v) ? v.toFixed(d) : "–");
 
@@ -204,8 +302,17 @@
       const lost = d("packetsLost"), recv = d("packetsReceived");
       return lost + recv > 0 ? (lost / (lost + recv)) * 100 : 0;
     })();
-    const total = (rtt || 0) + (buffer || 0) + (decode || 0);
+    const dropped = secs > 0 ? d("framesDropped") / secs : NaN;
+    watchVideo();
+    const toScreen = toScreenCount ? toScreenSum / toScreenCount : NaN;
+    toScreenSum = toScreenCount = 0;
+    // Atraso total ≈ ida e volta na rede + do quadro chegar até aparecer.
+    const total = (rtt || 0) + (Number.isFinite(toScreen) ? toScreen : (buffer || 0) + (decode || 0));
     last = video;
+
+    const kind = decoderKind(video, codec);
+    const prof = codec ? h264Profile(codec) : "";
+    const codecName = codec ? codec.mimeType.replace("video/", "") + (prof ? " " + prof : "") : "–";
 
     const el = ensureOverlay();
     if (!el) return;
@@ -214,10 +321,13 @@
       ["Ping (RTT)", fmt(rtt) + " ms", color(rtt, 30, 60)],
       ["Buffer", fmt(buffer) + " ms", color(buffer, 15, 40)],
       ["Decodificação", fmt(decode, 1) + " ms", color(decode, 5, 12)],
+      ["Chegada→tela", fmt(toScreen) + " ms", color(toScreen, 25, 50)],
+      ["Decodificador", kind, kind.startsWith("Hardware") ? "#6f6" : kind === "?" ? "#fff" : "#fd5"],
+      ["Codec", codecName],
       ["FPS", fmt(video.framesPerSecond)],
+      ["Descartados", fmt(dropped, 1) + " /s", color(dropped, 0, 2)],
       ["Taxa", fmt(mbps, 1) + " Mb/s"],
-      ["Perda pacotes", fmt(lostPct, 2) + " %", color(lostPct, 0.1, 1)],
-      ["Codec", codec ? codec.mimeType.replace("video/", "") : "–"]
+      ["Perda pacotes", fmt(lostPct, 2) + " %", color(lostPct, 0.1, 1)]
     ];
     // Montado com DOM (sem innerHTML) por causa de políticas Trusted Types.
     const frag = document.createDocumentFragment();
@@ -233,7 +343,7 @@
       frag.appendChild(row);
     });
     const hint = document.createElement("div");
-    hint.textContent = "Alt+L esconde";
+    hint.textContent = (kind.endsWith("*") ? "* previsto pelo navegador\n" : "") + "Alt+L esconde";
     hint.style.color = "#777";
     frag.appendChild(hint);
     el.replaceChildren(frag);

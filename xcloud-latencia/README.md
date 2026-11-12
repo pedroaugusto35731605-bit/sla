@@ -7,11 +7,32 @@ Extensão para Chrome/Edge que diminui o atraso do **Xbox Cloud Gaming** (Game P
 | Ajuste | Como ajuda |
 |---|---|
 | **Buffer de vídeo mínimo** | Por padrão o navegador guarda alguns quadros antes de exibir, para absorver variações da rede. A extensão zera esse buffer (`jitterBufferTarget = 0`), então cada quadro aparece assim que chega. É o maior ganho, geralmente algumas dezenas de ms. |
-| **Preferir H.264** | Coloca o H.264 em primeiro na negociação do stream. Ele é decodificado pela placa de vídeo em praticamente qualquer PC, com decodificação mais rápida e estável. |
-| **Painel de latência** | Mostra na tela o ping até o servidor, o tempo de buffer, o tempo de decodificação, FPS, taxa de dados, perda de pacotes e codec. Assim dá pra ver o que está causando o atraso. `Alt+L` mostra/esconde. |
+| **Decodificação pelo hardware** | Ao abrir o site, a extensão pergunta ao navegador quais formatos de vídeo a sua placa decodifica sozinha em 1080p60 e coloca esses formatos em primeiro na negociação do stream. Se o H.264 não tiver decodificação por hardware no seu PC, ela pede o perfil **Baseline**, que é o mais leve de decodificar pelo processador. |
+| **Painel de latência** | Mostra na tela o ping, o tempo de buffer, o tempo de decodificação por quadro, o tempo entre o quadro chegar e aparecer na tela, se o **decodificador é hardware ou software**, o codec/perfil, FPS, quadros descartados, taxa de dados e perda de pacotes. `Alt+L` mostra/esconde. |
 | **Modo leve** | Desliga desfoques e animações da interface do site, que disputam a GPU com o vídeo. |
 
 Tudo pode ser ligado e desligado clicando no ícone da extensão.
+
+### Opções de codec/decodificação
+
+- **Melhor para minha placa de vídeo** (padrão): escolhe sozinho conforme o teste de hardware.
+- **H.264 High**: melhor qualidade de imagem; bom quando a GPU decodifica H.264.
+- **H.264 Baseline**: imagem um pouco pior, mas decodificação mais leve. Útil em PCs fracos.
+- **Não mexer**: deixa o Xbox escolher.
+
+A troca de codec vale a partir do próximo jogo iniciado.
+
+### Se o painel mostrar "Decodificador: Software"
+
+A extensão não consegue ligar a decodificação por hardware sozinha. Isso é configurado no navegador:
+
+1. Em `chrome://settings/system` (ou `edge://settings/system`), ligue **Usar aceleração de hardware quando disponível** e reinicie o navegador.
+2. Abra `chrome://gpu` e confira se **Video Decode** está como *Hardware accelerated*.
+3. Atualize o driver da placa de vídeo.
+4. Em notebooks, use o carregador e o modo de energia "Melhor desempenho". No Windows, em Configurações → Sistema → Tela → Elementos gráficos, defina o navegador como "Alto desempenho".
+5. Nas configurações de stream do próprio Xbox, baixar para 720p reduz bastante o tempo de decodificação.
+
+Um asterisco (`Software*` / `Hardware*`) indica que o navegador não informou o decodificador em uso e o valor foi previsto pelo teste inicial.
 
 ## Como instalar
 

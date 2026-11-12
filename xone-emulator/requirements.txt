@@ -1,0 +1,2 @@
+# Interface gráfica do XOne-Emu
+PyQt6>=6.5,<7

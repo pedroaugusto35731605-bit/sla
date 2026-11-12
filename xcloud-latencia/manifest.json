@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "xCloud Baixa Latência",
+  "version": "1.0.0",
+  "description": "Reduz o atraso do Xbox Cloud Gaming no navegador: buffer de vídeo mínimo, codec com decodificação por hardware e painel de latência.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.xbox.com/*"],
+  "action": {
+    "default_title": "xCloud Baixa Latência",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.xbox.com/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://www.xbox.com/*"],
+      "js": ["bridge.js"],
+      "css": ["lite.css"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

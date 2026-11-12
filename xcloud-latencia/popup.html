@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>xCloud Baixa Latência</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; width: 300px; font: 13px/1.4 system-ui, sans-serif; background: #111; color: #eee; }
+    header { background: #107c10; padding: 10px 14px; font-weight: 600; font-size: 14px; }
+    main { padding: 8px 14px 12px; }
+    label.opt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #222; cursor: pointer; }
+    label.opt input { margin-top: 3px; }
+    small { display: block; color: #999; }
+    select { margin-top: 4px; width: 100%; background: #222; color: #eee; border: 1px solid #333; padding: 3px; }
+    .main-toggle { font-weight: 600; }
+    p.note { color: #999; font-size: 11px; margin: 10px 0 0; }
+    .off main .dep { opacity: .4; }
+  </style>
+</head>
+<body>
+  <header>🎮 xCloud Baixa Latência</header>
+  <main>
+    <label class="opt main-toggle"><input type="checkbox" id="enabled"> <span>Ativado</span></label>
+
+    <label class="opt dep"><input type="checkbox" id="minBuffer">
+      <span>Buffer de vídeo mínimo<small>Mostra cada quadro assim que chega. Maior ganho; pode dar pequenos engasgos em Wi-Fi instável.</small></span></label>
+
+    <div class="opt dep" style="display:block;padding:8px 0;border-bottom:1px solid #222">
+      Codec de vídeo
+      <select id="codec">
+        <option value="h264">Preferir H.264 (decodificação por hardware)</option>
+        <option value="auto">Automático (o que o Xbox escolher)</option>
+      </select>
+    </div>
+
+    <label class="opt dep"><input type="checkbox" id="overlay">
+      <span>Painel de latência<small>Ping, buffer, decodificação, FPS. Alt+L esconde no jogo.</small></span></label>
+
+    <label class="opt dep"><input type="checkbox" id="lite">
+      <span>Modo leve<small>Desliga desfoques e animações da interface do site.</small></span></label>
+
+    <p class="note">Mudanças no buffer valem na hora. Mudança de codec vale ao iniciar o próximo jogo.</p>
+  </main>
+  <script src="defaults.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

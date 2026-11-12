@@ -1,0 +1,10 @@
+/* Modo leve: tira efeitos que gastam GPU enquanto o vídeo do jogo é decodificado. */
+html.xcl-lite *,
+html.xcl-lite *::before,
+html.xcl-lite *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
